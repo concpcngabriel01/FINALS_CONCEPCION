@@ -604,6 +604,88 @@
   color: #536558;
 }
 
+.recovery-shell {
+  min-height: 100vh;
+  background: #f6f5f1;
+  color: #29332c;
+  font-family: Outfit, sans-serif;
+}
+
+.recovery-card {
+  width: min(460px, calc(100% - 36px));
+  margin: 11vh auto 50px;
+  border: 1px solid #e1e6de;
+  border-radius: 24px;
+  background: rgb(255 255 255 / 78%);
+  padding: 34px;
+  box-shadow: 0 12px 36px rgb(54 75 60 / 7%);
+}
+
+.recovery-card h1 {
+  margin: 0;
+  color: #344b3b;
+  font-size: clamp(30px, 5vw, 38px);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+
+.recovery-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.recovery-form label {
+  display: grid;
+  gap: 7px;
+  color: #536558;
+  font-size: 12px;
+}
+
+.recovery-form input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #dce2d9;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  color: #29332c;
+  font: inherit;
+  font-size: 13px;
+}
+
+.recovery-form input:focus {
+  border-color: #91a995;
+  outline: 2px solid rgb(145 169 149 / 25%);
+}
+
+.recovery-help {
+  margin: 18px 0 0;
+  color: #78857a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.recovery-back-button,
+.recovery-forgot-link {
+  display: block;
+  margin: 18px auto 0;
+  border: 0;
+  background: transparent;
+  padding: 4px;
+  color: #45634d;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.recovery-back-button:hover,
+.recovery-forgot-link:hover {
+  color: #52765d;
+}
+
 @media (max-width: 680px) {
   .admin-content {
     width: calc(100% - 28px);
@@ -672,6 +754,10 @@
   .admin-product-form,
   .admin-login-card {
     padding: 20px;
+  }
+
+  .recovery-card {
+    padding: 24px;
   }
 }
 

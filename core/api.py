@@ -6,12 +6,17 @@ import uuid
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -39,6 +44,8 @@ from .serializers import (
     CheckoutSerializer,
     LoginSerializer,
     OrderSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     ProductSerializer,
     ProfileUpdateSerializer,
     RegisterSerializer,
@@ -55,6 +62,99 @@ def _error(message, code):
 def _cart_response(cart):
     cart = Cart.objects.prefetch_related("items__product").get(pk=cart.pk)
     return Response(CartSerializer(cart).data)
+
+
+class PasswordResetRateThrottle(AnonRateThrottle):
+    rate = "5/hour"
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [PasswordResetRateThrottle]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+        users = User.objects.filter(
+            email__iexact=email,
+            is_active=True,
+            shopper_profile__isnull=False,
+        )
+
+        for user in users:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = (
+                f"{settings.FRONTEND_URL.rstrip('/')}/reset-password"
+                f"?uid={uid}&token={token}"
+            )
+            sent = send_mail(
+                "Reset your Living Space password",
+                (
+                    "We received a request to reset your Living Space password.\n\n"
+                    f"Choose a new password using this one-time link:\n{reset_url}\n\n"
+                    "If you did not request this, you can ignore this email."
+                ),
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+            if sent != 1:
+                return _error(
+                    "The reset email could not be sent. Please try again later.",
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        return Response({
+            "detail": "If an account exists for that email, a password reset link has been sent."
+        })
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        uid = request.data.get("uid", "")
+        if not isinstance(uid, str) or not uid:
+            return _error(
+                "This password reset link is invalid or has expired.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            user_id = force_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(pk=user_id, is_active=True)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return _error(
+                "This password reset link is invalid or has expired.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+        token = request.data.get("token", "")
+        if not isinstance(token, str) or not default_token_generator.check_token(
+            user, token
+        ):
+            return _error(
+                "This password reset link is invalid or has expired.",
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = PasswordResetConfirmSerializer(
+            data={"new_password": request.data.get("new_password")},
+            context={"user": user},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            user.set_password(serializer.validated_data["new_password"])
+            user.save(update_fields=["password"])
+            profile = ShopperProfile.objects.filter(user=user).first()
+            if profile:
+                profile.token_version += 1
+                profile.save(update_fields=["token_version"])
+        return Response({"detail": "Your password has been reset. You can now sign in."})
 
 
 class AdminLoginView(APIView):

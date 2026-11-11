@@ -1,7 +1,9 @@
 from unittest.mock import patch
+import re
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import RequestFactory, TestCase
 from django.test.utils import override_settings
 from rest_framework.test import APIClient
@@ -681,3 +683,94 @@ class AdminProductApiTests(TestCase):
             self.client.get(f"/api/products/{payload['id']}/").status_code,
             404,
         )
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    FRONTEND_URL="http://localhost:5173",
+)
+class PasswordResetApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        registration = self.client.post(
+            "/api/auth/register/",
+            {
+                "name": "Reset Shopper",
+                "username": "reset-shopper",
+                "email": "reset-shopper@example.com",
+                "password": "Original-Password-2026!",
+            },
+            format="json",
+        )
+        self.assertEqual(registration.status_code, 201, registration.data)
+        self.user_id = registration.data["user"]["id"]
+        self.access_token = registration.data["access"]
+        mail.outbox.clear()
+
+    def request_reset_link(self):
+        response = self.client.post(
+            "/api/auth/password-reset/",
+            {"email": "RESET-SHOPPER@example.com"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(mail.outbox), 1)
+        match = re.search(
+            r"http://localhost:5173/reset-password\?uid=([^\s&]+)&token=([^\s]+)",
+            mail.outbox[0].body,
+        )
+        self.assertIsNotNone(match, mail.outbox[0].body)
+        return match.group(1), match.group(2)
+
+    def test_reset_request_is_generic_and_unknown_email_sends_nothing(self):
+        known = self.client.post(
+            "/api/auth/password-reset/",
+            {"email": "reset-shopper@example.com"},
+            format="json",
+        )
+        unknown = self.client.post(
+            "/api/auth/password-reset/",
+            {"email": "not-registered@example.com"},
+            format="json",
+        )
+        self.assertEqual(known.status_code, 200)
+        self.assertEqual(unknown.status_code, 200)
+        self.assertEqual(known.data, unknown.data)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_reset_link_changes_password_once_and_revokes_customer_token(self):
+        uid, token = self.request_reset_link()
+        payload = {
+            "uid": uid,
+            "token": token,
+            "new_password": "New-Reset-Password-2026!",
+        }
+        response = self.client.post(
+            "/api/auth/password-reset/confirm/", payload, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        user = get_user_model().objects.get(pk=self.user_id)
+        self.assertTrue(user.check_password("New-Reset-Password-2026!"))
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+        self.assertEqual(self.client.get("/api/auth/me/").status_code, 401)
+        self.client.credentials()
+
+        repeated = self.client.post(
+            "/api/auth/password-reset/confirm/", payload, format="json"
+        )
+        self.assertEqual(repeated.status_code, 400)
+        login = self.client.post(
+            "/api/auth/login/",
+            {"username": "reset-shopper", "password": "New-Reset-Password-2026!"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 200, login.data)
+
+    def test_invalid_reset_link_is_rejected(self):
+        response = self.client.post(
+            "/api/auth/password-reset/confirm/",
+            {"uid": {}, "token": "invalid", "new_password": "New-Reset-Password-2026!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)

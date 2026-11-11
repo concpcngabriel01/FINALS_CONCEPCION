@@ -49,6 +49,8 @@ requests to Django at `http://127.0.0.1:8000`.
 - Update the customer profile and password, revoke the current sign-in on
   logout, add and manage delivery addresses from Account, and maintain a
   personal wishlist.
+- Request a password-reset link by email and set a new password with the
+  one-time link; customer sessions are revoked after a reset.
 - Add products to a personal cart, change quantities, and remove items.
 - Check out on the separate `/checkout` page using a saved delivery address and
   Cash on Delivery; stock is checked and decremented, the delivery details and
@@ -72,9 +74,14 @@ simulation with `PAYMENT_DEMO_MODE=false`; only COD will remain available.
 For a non-demo deployment, also set `DJANGO_DEBUG=false`.
 Staff should update payment status in Django admin only after independently
 verifying a real payment or COD collection. There is no shipping-fee calculation.
-Google sign-in, email verification,
-password-reset email, product reviews, promotions, and third-party live chat
-are not configured in this local foundation.
+Google sign-in, email verification, product reviews, promotions, and
+third-party live chat are not configured in this local foundation. Password
+reset is available; local development prints its email and reset link in the
+Django terminal because the default email backend is the console backend.
+To deliver reset emails outside local development, configure
+`EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, `EMAIL_HOST`,
+`EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`,
+`DEFAULT_FROM_EMAIL`, and `FRONTEND_URL` in the server environment.
 
 ## Django models and serializers
 
@@ -117,6 +124,8 @@ token returned by registration or login.
 | `POST` | `/api/auth/logout/` | Revoke the current customer bearer token |
 | `GET`, `PATCH` | `/api/auth/me/` | Get or update the signed-in profile (`name`) |
 | `POST` | `/api/auth/change-password/` | Change password (`current_password`, `new_password`) |
+| `POST` | `/api/auth/password-reset/` | Request a reset link (`email`) |
+| `POST` | `/api/auth/password-reset/confirm/` | Set a new password (`uid`, `token`, `new_password`) |
 | `GET` | `/api/categories/` | List active catalog categories |
 | `GET` | `/api/payment-methods/` | List payment methods and whether each is configured |
 | `GET` | `/api/products/` | Search/filter/sort (`search`, `category`, `min_price`, `max_price`, `in_stock`, `sort`) |

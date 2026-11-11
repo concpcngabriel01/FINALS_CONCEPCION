@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminProducts from "./AdminProducts.jsx";
+import PasswordRecovery from "./PasswordRecovery.jsx";
 
 const TOKEN_KEY = "living_space_token";
 const LEGACY_TOKEN_KEY = "northline_token";
@@ -236,7 +237,9 @@ function App() {
     const path = window.location.pathname.replace(/\/+$/, "") || "/";
     return path === "/shop" ? "shop" :
       path === "/checkout" ? "checkout" :
-        path === "/admin/products" ? "admin" : "home";
+        path === "/admin/products" ? "admin" :
+          path === "/forgot-password" ? "forgot-password" :
+            path === "/reset-password" ? "reset-password" : "home";
   });
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState(PRODUCT_CATEGORIES);
@@ -291,9 +294,11 @@ function App() {
     const path = page === "checkout"
       ? `/checkout${product ? `?buyNow=${encodeURIComponent(product.id)}` : ""}`
       : page === "shop" ? "/shop" : page === "admin" ? "/admin/products" : "/";
-    if (window.location.pathname !== path) window.history.pushState({}, "", path);
-    else if (window.location.href !== new URL(path, window.location.origin).href) {
-      window.history.pushState({}, "", path);
+    const destination = page === "forgot-password" ? "/forgot-password" :
+      page === "reset-password" ? "/reset-password" : path;
+    if (window.location.pathname !== destination) window.history.pushState({}, "", destination);
+    else if (window.location.href !== new URL(destination, window.location.origin).href) {
+      window.history.pushState({}, "", destination);
     }
     setCurrentPage(page);
     setBuyNowProduct(product);
@@ -379,7 +384,9 @@ function App() {
     const handleHistoryChange = () => {
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
       const page = path === "/shop" ? "shop" : path === "/checkout" ? "checkout" :
-        path === "/admin/products" ? "admin" : "home";
+        path === "/admin/products" ? "admin" :
+          path === "/forgot-password" ? "forgot-password" :
+            path === "/reset-password" ? "reset-password" : "home";
       setCurrentPage(page);
       if (page === "checkout") {
         const productId = new URLSearchParams(window.location.search).get("buyNow");
@@ -866,7 +873,12 @@ function App() {
 
   const selectedPaymentMethodInfo = paymentMethods.find((method) => method.id === selectedPaymentMethod);
 
-  return currentPage === "admin" ? <AdminProducts /> : (
+  if (currentPage === "admin") return <AdminProducts />;
+  if (currentPage === "forgot-password" || currentPage === "reset-password") {
+    return <PasswordRecovery onBackToLogin={() => { navigateTo("home"); openAuth(); }} />;
+  }
+
+  return (
     <div className={`${styles.siteShell} store-shell ${darkMode ? "store-dark" : ""}`}>
       <div className={styles.announcement}>
         <span>Thoughtful essentials for every Filipino home</span>
@@ -1292,6 +1304,7 @@ function App() {
             <button className={styles.checkoutButton} disabled={authBusy} type="submit">{authBusy ? "Please wait…" : authMode === "login" ? "Log in" : "Create account"}</button>
           </form>
           <p className={styles.authSwitch}>{authMode === "login" ? "New here?" : "Already have an account?"} <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthError(""); }} type="button">{authMode === "login" ? "Create an account" : "Log in"}</button></p>
+          {authMode === "login" && <button className="recovery-forgot-link" onClick={() => navigateTo("forgot-password")} type="button">Forgot password?</button>}
         </section>
       </div>}
 

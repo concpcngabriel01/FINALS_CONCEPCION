@@ -118,6 +118,26 @@ class LoginSerializer(serializers.Serializer):
         return value.strip().lower()
 
 
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(max_length=254)
+
+    def validate_email(self, value):
+        return value.strip().lower()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    new_password = serializers.CharField(
+        write_only=True, min_length=8, max_length=128, trim_whitespace=False
+    )
+
+    def validate_new_password(self, value):
+        try:
+            validate_password(value, user=self.context["user"])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages)) from exc
+        return value
+
+
 class ProductSerializer(serializers.ModelSerializer):
     UniqueID = serializers.CharField(source="id", read_only=True)
 
